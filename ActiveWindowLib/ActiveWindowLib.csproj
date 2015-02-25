@@ -90,7 +90,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="IOperation.cs" />
     <Compile Include="NoProcessInfo.cs" />
+    <Compile Include="MouseInfo.cs" />
     <Compile Include="ProcessInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

@@ -5,7 +5,7 @@ using System.Text;
 
 namespace ActiveWindowLib
 {
-   public class ProcessInfo
+   public class ProcessInfo : IOperation
     {
         public string ProcessId { get; set; }
 
@@ -20,5 +20,10 @@ namespace ActiveWindowLib
         public string WindowTitle { get; set; }
 
         public string ActiveWindowId { get; set; }
+
+        public override string ToString()
+        {
+            return WindowTitle;
+        }
     }
 }

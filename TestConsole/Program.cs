@@ -9,6 +9,7 @@ using System.Reactive.Linq;
 using System.Reactive.Concurrency;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Reactive;
 
 namespace TestConsole
 {
@@ -26,8 +27,7 @@ namespace TestConsole
                 SelectMany(_ => ahk.GetAllAHKVars());
 
             var mouse = awtWatch.OfType<MouseInfo>();
-            var skipMouse = mouse.Skip(1);
-            var mouseDelta = mouse.Zip(skipMouse, (prev, curr) => new MouseInfo
+            var mouseDelta = mouse.Zip(mouse.Skip(1), (prev, curr) => new MouseInfo
                                                         {
                                                             X = curr.X - prev.X,
                                                             Y = curr.Y - prev.Y
@@ -36,16 +36,19 @@ namespace TestConsole
 
             var windows = awtWatch.OfType<ProcessInfo>();
 
-            var mouseSub = mouseDelta.Where(p => p.X != 0 && p.Y != 0).Select(p => p.ToString()).DistinctUntilChanged().TimeInterval();
+            var mouseSub = mouseDelta.Select(p => p.X != 0 && p.Y != 0 ? "Moving" : "Not Moving").StartWith("Not Moving").DistinctUntilChanged().TimeInterval();
             var windowsSub = windows.Select(p => p.ToString()).DistinctUntilChanged().TimeInterval();
             var sessionSwitchedSub = sessionSwitchedWatch.Select((f) => f.EventArgs.Reason.ToString()).StartWith(SessionSwitchReason.SessionUnlock.ToString()).TimeInterval();
 
-
-
-            using (mouseSub.Merge(windowsSub).Merge(sessionSwitchedSub).Dump("Main"))
-            {
-                Console.ReadLine();
-            }
+            var howLongHasMouseBeenMoving = mouseSub.HowLongHas(startWithValue: "Not Moving");
+            var howLongHasBeenActiveWindow = windowsSub.HowLongHas(startWithValue: String.Empty);
+            var howLongHasSessionBeenOpen = windowsSub.HowLongHas(startWithValue: "SessionUnlock");
+            ////.Merge(sessionSwitchedSub)
+            //using (howLongHasMouseBeenMoving.CombineLatest(windowsSub, //.Where(p => p.Value != "Not Moving" || p.Interval < TimeSpan.FromSeconds(10))
+            //    (l,r) => l.Value.Equals("Moving") || l.Interval < TimeSpan.FromSeconds(5) ? r : l.Value).DistinctUntilChanged().Dump("Main"))
+            //{
+            //    Console.ReadLine();
+            //}
 
         }
     }
@@ -69,6 +72,17 @@ public static class SampleExtentions
         i => Console.WriteLine("{0}-->{1} onthread: {2}", name, i.ToString().Left(40), Thread.CurrentThread.ManagedThreadId),
         ex => Console.WriteLine("{0} failed-->{1}", name, ex.Message),
         () => Console.WriteLine("{0} completed", name));
+    }
+
+
+    public static IObservable<TimeInterval<T>> HowLongHas<T>(this IObservable<TimeInterval<T>> source, T? startWithValue = null, TimeSpan? time = null)
+    {
+        return startWithValue.HasValue ? source.HowLongHas(source, new TimeInterval<T>(startWithValue.Value, time.HasValue ? time.Value : TimeSpan.Zero)) : source;
+    }
+    public static IObservable<TimeInterval<T>> HowLongHas<T>(this IObservable<TimeInterval<T>> source, TimeInterval<T>? startWith = null)
+    {
+        var howLong = source.Zip(source.Skip(1), (prev, curr) => new TimeInterval<T>(prev.Value, curr.Interval));
+        return startWith.HasValue ? howLong.StartWith(startWith.Value) : howLong;
     }
 }
 public static class Utils

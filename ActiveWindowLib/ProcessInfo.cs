@@ -23,7 +23,7 @@ namespace ActiveWindowLib
 
         public override string ToString()
         {
-            return WindowTitle;
+            return (ProcessName ?? String.Empty) + WindowTitle;
         }
     }
 }

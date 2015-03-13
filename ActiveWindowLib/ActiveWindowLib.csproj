@@ -90,14 +90,26 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AutohotKeyObservable.cs" />
     <Compile Include="IOperation.cs" />
     <Compile Include="NoProcessInfo.cs" />
     <Compile Include="MouseInfo.cs" />
+    <Compile Include="PersonInfo.cs" />
     <Compile Include="ProcessInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SessionObservable.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <Content Include="Window.ahk">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AHK\AutoHotkey.Interop\AutoHotkey.Interop.csproj">
+      <Project>{2869dbfe-7762-4930-95ea-2b0c111cf353}</Project>
+      <Name>AutoHotkey.Interop</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

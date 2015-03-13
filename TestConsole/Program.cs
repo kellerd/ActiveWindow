@@ -1,100 +1,98 @@
-﻿using ActiveWindowLib;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Reactive.Disposables;
-using System.Reactive.Linq;
-using System.Reactive.Concurrency;
-using Microsoft.Win32;
-using System.Diagnostics;
 using System.Reactive;
+using System.Reactive.Linq;
+using ActiveWindowLib;
+using Microsoft.Win32;
 
 namespace TestConsole
 {
     class Program
     {
-        static DisposableAutoHotKey ahk = new DisposableAutoHotKey();
         static void Main(string[] args)
         {
-            ahk.Load("Window.ahk");
-            ahk.ExecLabel("Init");
 
-            var sessionSwitchedWatch = Observable.FromEventPattern<SessionSwitchEventHandler, SessionSwitchEventArgs>(h => Microsoft.Win32.SystemEvents.SessionSwitch += h, h => Microsoft.Win32.SystemEvents.SessionSwitch -= h);
+            var awtWatch = AutoHotKeyObservable.WatchAwt(TimeSpan.FromMilliseconds(2000));
+            var windows = awtWatch.OfType<ProcessInfo>().Select(p => p.ToString()).DistinctUntilChanged();
+            var personActive = awtWatch.MouseMoving().PersonActive();
 
-            var awtWatch = Observable.Interval(TimeSpan.FromMilliseconds(2000)).
-                SelectMany(_ => ahk.GetAllAHKVars());
-
-            var mouse = awtWatch.OfType<MouseInfo>();
-            var mouseDelta = mouse.Zip(mouse.Skip(1), (prev, curr) => new MouseInfo
-                                                        {
-                                                            X = curr.X - prev.X,
-                                                            Y = curr.Y - prev.Y
-                                                        });
-
-
-            var windows = awtWatch.OfType<ProcessInfo>();
-
-            var mouseSub = mouseDelta.Select(p => p.X != 0 && p.Y != 0 ? "Moving" : "Not Moving").StartWith("Not Moving").DistinctUntilChanged().TimeInterval();
-            var windowsSub = windows.Select(p => p.ToString()).DistinctUntilChanged().TimeInterval();
-            var sessionSwitchedSub = sessionSwitchedWatch.Select((f) => f.EventArgs.Reason.ToString()).StartWith(SessionSwitchReason.SessionUnlock.ToString()).TimeInterval();
-
-            var howLongHasMouseBeenMoving = mouseSub.HowLongHas(startWithValue: "Not Moving");
-            var howLongHasBeenActiveWindow = windowsSub.HowLongHas(startWithValue: String.Empty);
-            var howLongHasSessionBeenOpen = windowsSub.HowLongHas(startWithValue: "SessionUnlock");
-            ////.Merge(sessionSwitchedSub)
-            //using (howLongHasMouseBeenMoving.CombineLatest(windowsSub, //.Where(p => p.Value != "Not Moving" || p.Interval < TimeSpan.FromSeconds(10))
-            //    (l,r) => l.Value.Equals("Moving") || l.Interval < TimeSpan.FromSeconds(5) ? r : l.Value).DistinctUntilChanged().Dump("Main"))
-            //{
-            //    Console.ReadLine();
-            //}
-
+            var all = windows.CombineLatest(personActive,
+                                                (w, a) => a == PersonInfo.ActiveStatus.Active ? w : a.ToString()).
+                              CombineLatest(SessionObservable.SessionSwitched(),
+                                                (w, s) => s == SessionSwitchReason.SessionUnlock ? w : s.ToString()).
+                              TimeInterval().HowLongHas("Active");
+            using (all.Dump("Windows"))
+            {
+                Console.ReadKey();
+            }
         }
+
+        
     }
 
 }
 public static class SampleExtentions
 {
-    public static IObservable<IOperation> GetAllAHKVars(this AutoHotkey.Interop.AutoHotkeyEngine ahk)
-    {
-        var xy = ahk.ExecFunction("GetMyMouse", string.Empty, string.Empty);
-        var split = xy.Split('|');
-        return Observable.Return<IOperation>(new ProcessInfo() { WindowTitle = ahk.ExecFunction("GetMyWindow", string.Empty) }).Concat
-        (Observable.Return<IOperation>(new MouseInfo { X = Int32.Parse(split[0]), Y = Int32.Parse(split[1]) })
-            //(Observable.Return<IOperation>(new MouseInfo { X = Int32.Parse(ahk.GetVar("xpos")), Y = Int32.Parse(ahk.GetVar("ypos")) })
-        );
-    }
+   
 
-    public static IDisposable Dump<T>(this IObservable<T> source, string name)
+    public static IDisposable Dump<T>(this IObservable<T> source, string name) 
     {
         return source.Subscribe(
-        i => Console.WriteLine("{0}-->{1} onthread: {2}", name, i.ToString().Left(40), Thread.CurrentThread.ManagedThreadId),
+            i => Console.WriteLine("{0}-->{1}", name, (i == null ? String.Empty : i.ToString()).LeftAndRight(60)),
         ex => Console.WriteLine("{0} failed-->{1}", name, ex.Message),
         () => Console.WriteLine("{0} completed", name));
     }
-
-
-    public static IObservable<TimeInterval<T>> HowLongHas<T>(this IObservable<TimeInterval<T>> source, T? startWithValue = null, TimeSpan? time = null)
+    public static string LeftAndRight(this string source, int length )
     {
-        return startWithValue.HasValue ? source.HowLongHas(source, new TimeInterval<T>(startWithValue.Value, time.HasValue ? time.Value : TimeSpan.Zero)) : source;
+        if (source.Length <= length)
+        {
+            return source;
+        }
+        return source.Left(length / 2) + "..." + source.Right(length / 2);
+    }
+
+    public static string Right(this string original, int numberCharacters)
+    {
+        return original.Substring(original.Length - numberCharacters);
+    }
+
+    public static IObservable<TimeInterval<T>> HowLongHas<T>(this IObservable<TimeInterval<T>> source, T startWithValue = null, TimeSpan? time = null) where T : class
+    {
+
+        return startWithValue != null ? source.HowLongHas(new TimeInterval<T>(startWithValue, time ?? TimeSpan.Zero)) : source;
     }
     public static IObservable<TimeInterval<T>> HowLongHas<T>(this IObservable<TimeInterval<T>> source, TimeInterval<T>? startWith = null)
     {
         var howLong = source.Zip(source.Skip(1), (prev, curr) => new TimeInterval<T>(prev.Value, curr.Interval));
         return startWith.HasValue ? howLong.StartWith(startWith.Value) : howLong;
     }
+
+    /// <summary>
+    /// Returns the source sequence prefixed with the specified value.
+    /// </summary>
+    /// <typeparam name="TSource">Source sequence element type.</typeparam>
+    /// <param name="source">Source sequence.</param>
+    /// <param name="values">Values to prefix the sequence with.</param>
+    /// <returns>Sequence starting with the specified prefix value, followed by the source sequence.</returns>
+    public static IEnumerable<TSource> StartWith<TSource>(this IEnumerable<TSource> source, params TSource[] values)
+    {
+        if (source == null)
+            throw new ArgumentNullException("source");
+        return source.StartWith_(values);
+    }
+    private static IEnumerable<TSource> StartWith_<TSource>(this IEnumerable<TSource> source, params TSource[] values)
+    {
+        foreach (var x in values)
+            yield return x;
+        foreach (var item in source)
+            yield return item;
+    }
+
 }
 public static class Utils
 {
     public static string Left(this string str, int length)
     {
         return str.Substring(0, Math.Min(length, str.Length));
-    }
-}
-public class DisposableAutoHotKey : AutoHotkey.Interop.AutoHotkeyEngine, IDisposable
-{
-    public void Dispose()
-    {
     }
 }

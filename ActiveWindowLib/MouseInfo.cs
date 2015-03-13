@@ -13,5 +13,11 @@ namespace ActiveWindowLib
        {
            return X + "|" + Y;
        }
+
+       public enum MouseStatus
+       {
+           Moving,
+           NotMoving
+       }
     }
 }

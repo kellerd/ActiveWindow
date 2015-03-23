@@ -97,6 +97,7 @@
     <Compile Include="PersonInfo.cs" />
     <Compile Include="ProcessInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ReactiveExtensions.cs" />
     <Compile Include="SessionObservable.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -118,8 +118,9 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
-    <Compile Include="ObservableKeyPair.cs" />
-    <Compile Include="ValueObject.cs" />
+    <Compile Include="Models\Rule.cs" />
+    <Compile Include="UI\ObservableKeyPair.cs" />
+    <Compile Include="UI\ValueObject.cs" />
     <Compile Include="ViewModels\MainViewModel.cs" />
     <Page Include="Views\MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
@@ -129,16 +130,16 @@
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="ViewModels\Project.cs" />
-    <Compile Include="ViewModels\RelayCommand.cs" />
-    <Compile Include="ViewModels\Work.cs" />
+    <Compile Include="Models\Project.cs" />
+    <Compile Include="UI\RelayCommand.cs" />
+    <Compile Include="Models\Work.cs" />
     <Compile Include="Views\MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="NinjectServiceLocator.cs" />
+    <Compile Include="UI\NinjectServiceLocator.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>

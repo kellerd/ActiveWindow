@@ -1,16 +1,17 @@
 ﻿using ActiveWindowLib;
 using Microsoft.Win32;
 using System;
+using System.Linq;
 using System.Collections.ObjectModel;
-using ActiveWindow.ViewModels;
 using System.Reactive.Linq;
 using System.Reactive;
 using System.ComponentModel;
 using System.Windows.Input;
-using System.Windows;
+using System.Reactive.Subjects;
+using ActiveWindow.Models;
 
 
-namespace ActiveWindow
+namespace ActiveWindow.ViewModels
 {
     public class MainViewModel : IDisposable, INotifyPropertyChanged
     {
@@ -26,8 +27,20 @@ namespace ActiveWindow
                 }
             }
         }
-        private IObservable<Timestamped<TimeInterval<string>>> _PublicEvents;
-        public IObservable<Timestamped<TimeInterval<string>>> PublicEvents
+        public ObservableCollection<Rule> Rules
+        {
+            get { return _Rules; }
+            private set
+            {
+                if (_Rules != value)
+                {
+                    _Rules = value;
+                    OnPropertyChanged("Rules");
+                }
+            }
+        }
+        private IConnectableObservable<Timestamped<TimeInterval<string>>> _PublicEvents;
+        public IConnectableObservable<Timestamped<TimeInterval<string>>> PublicEvents
         {
             get { return _PublicEvents; }
             private set
@@ -39,12 +52,25 @@ namespace ActiveWindow
                 }
             }
         }
-        //var itemAddedObservable = Observable
-        //         .FromEventPattern<NotifyCollectionChangedEventArgs>(items, "CollectionChanged")
-        //         .Select(change => change.EventArgs.NewItems)
+        private IDisposable PublicEventConnection { get; set; }
+
         public MainViewModel()
         {
-            CreateRule = new RelayCommand(param => MessageBox.Show(param.ToString()));
+            CreateRule = new RelayCommand<Project>(param =>
+            {
+                Questions.Clear();
+                PublicEventConnection.Dispose();
+                Rules.Add(new Rule()
+                {
+                    What = param.Work.What,
+                    Enabled = true,
+                    Comparison = RuleType.Equals,
+                    From = new TimeSpan(0, 0, 0),
+                    To = new TimeSpan(23, 59, 59),
+                    Do = Rule.Ignore
+                });
+                PublicEventConnection = PublicEvents.Connect();
+            });
         }
         private IDisposable WhatWereYouDoing
         {
@@ -78,8 +104,18 @@ namespace ActiveWindow
                               TimeInterval().HowLongHas("Active").Timestamp().Select(i =>
                               {
                                   return new Timestamped<TimeInterval<string>>(i.Value, i.Timestamp.RoundDown());
-                              });
-            WhatWereYouDoing = PublicEvents.ObserveOnDispatcher().Subscribe((i) =>
+                              }).Publish();
+
+
+            WhatWereYouDoing = PublicEvents.Where(evt =>
+            {
+               return !Rules.
+                    Where(r => r.Enabled).
+                    Where(r => evt.Timestamp.TimeOfDay >= r.From).
+                    Where(r => evt.Timestamp.TimeOfDay <= r.To).
+                    Where(r => r.Comparison == RuleType.Equals).
+                    Where(r => r.What == evt.Value.Value).Any();
+            }).ObserveOnDispatcher().Subscribe((i) =>
             {
                 Work w = new Work() { What = i.Value.Value, When = i.Timestamp.ToLocalTime() };
                 if (Questions.ContainsKey(w))
@@ -87,18 +123,20 @@ namespace ActiveWindow
                 else
                     Questions.Add(w, new Project(i.Value.Interval, w));
             });
+            PublicEventConnection = PublicEvents.Connect();
         }
 
         private ObservableDictionary<Work, Project> _Questions;
         private IDisposable _WhatWereYouDoing;
 
         public event PropertyChangedEventHandler PropertyChanged;
+        private ObservableCollection<Rule> _Rules;
         public void OnPropertyChanged(string name)
         {
             PropertyChangedEventHandler handler = PropertyChanged;
             if (handler != null) handler(this, new PropertyChangedEventArgs(name));
         }
-        
+
         public ICommand CreateRule { get; private set; }
     }
 

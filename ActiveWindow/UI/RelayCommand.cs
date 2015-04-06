@@ -1,19 +1,29 @@
 ﻿using System;
 using System.Windows.Input;
-public class RelayCommand : ICommand
+public class RelayCommand : RelayCommand<object>
 {
-    private Action<object> execute;
+    public RelayCommand(Action<object> execute)
+        : this(execute, DefaultCanExecute)
+    {  }
 
-    private Predicate<object> canExecute;
+    public RelayCommand(Action<object> execute, Predicate<object> canExecute)
+        : base(execute, canExecute)
+    { }
+}
+public class RelayCommand<T> : ICommand
+{
+    private Action<T> execute;
+
+    private Predicate<T> canExecute;
 
     private event EventHandler CanExecuteChangedInternal;
 
-    public RelayCommand(Action<object> execute)
+    public RelayCommand(Action<T> execute)
         : this(execute, DefaultCanExecute)
     {
     }
 
-    public RelayCommand(Action<object> execute, Predicate<object> canExecute)
+    public RelayCommand(Action<T> execute, Predicate<T> canExecute)
     {
         if (execute == null)
         {
@@ -46,12 +56,12 @@ public class RelayCommand : ICommand
 
     public bool CanExecute(object parameter)
     {
-        return this.canExecute != null && this.canExecute(parameter);
+        return this.canExecute != null && this.canExecute((T)(parameter));
     }
 
     public void Execute(object parameter)
     {
-        this.execute(parameter);
+        this.execute((T)parameter);
     }
 
     public void OnCanExecuteChanged()
@@ -70,7 +80,7 @@ public class RelayCommand : ICommand
         this.execute = _ => { return; };
     }
 
-    private static bool DefaultCanExecute(object parameter)
+    protected static bool DefaultCanExecute(T parameter)
     {
         return true;
     }

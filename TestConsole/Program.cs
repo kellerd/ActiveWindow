@@ -1,15 +1,9 @@
-﻿using ActiveWindowLib;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Reactive.Disposables;
+using System.Reactive;
 using System.Reactive.Linq;
-using System.Reactive.Concurrency;
+using ActiveWindowLib;
 using Microsoft.Win32;
-using TransparencyMenu;
-using System.Diagnostics;
 
 namespace TestConsole
 {
@@ -17,47 +11,77 @@ namespace TestConsole
     {
         static void Main(string[] args)
         {
-            var hooks = new GlobalHooks(Process.GetCurrentProcess().MainWindowHandle);
-            try
-            {
-                ;
-                var WindowActivated = Observable.FromEventPattern<TransparencyMenu.GlobalHooks.WindowEventHandler, WindowEventArgs>(h => {
-                    hooks.Shell.WindowActivated += h;
-                    hooks.Shell.Start();
-                }, h => hooks.Shell.WindowActivated -= h).Finally(
-                () => { 
-                    hooks.Shell.Stop(); 
-                }
-                );
 
-            var SessionSwitched = Observable.FromEventPattern<SessionSwitchEventHandler, SessionSwitchEventArgs>(h => Microsoft.Win32.SystemEvents.SessionSwitch += h, h => Microsoft.Win32.SystemEvents.SessionSwitch -= h);
-            //var WindowActivated = Observable.FromEventPattern<MsdnMag.GlobalCbtHook.CbtEventHandler, CbtEventArgs>(h => cbtHook.WindowActivated += h, h => cbtHook.WindowActivated -= h);
+            var awtWatch = AutoHotKeyObservable.WatchAwt(TimeSpan.FromMilliseconds(2000));
+            var windows = awtWatch.OfType<ProcessInfo>().Select(p => p.ToString()).DistinctUntilChanged();
+            var personActive = awtWatch.MouseMoving().PersonActive();
 
-
-            var obs = Observable.Interval(TimeSpan.FromMilliseconds(200)).
-                Select(_ => NativeMethods.GetCurrentProcessInfo().WindowTitle).
-                Timestamp();
-            // var sub = obs
-            using (var d = WindowActivated.Dump("WindowTitle: "))
+            var all = windows.CombineLatest(personActive,
+                                                (w, a) => a == PersonInfo.ActiveStatus.Active ? w : a.ToString()).
+                              CombineLatest(SessionObservable.SessionSwitched(),
+                                                (w, s) => s == SessionSwitchReason.SessionUnlock ? w : s.ToString()).
+                              TimeInterval().HowLongHas("Active");
+            using (all.Dump("Windows"))
             {
-                Console.ReadLine();
-            }
-            }
-            finally
-            {
-                hooks.Shell.Stop();
+                Console.ReadKey();
             }
         }
+
+        
     }
 
 }
 public static class SampleExtentions
 {
-    public static IDisposable Dump<T>(this IObservable<T> source, string name)
+   
+
+    public static IDisposable Dump<T>(this IObservable<T> source, string name) 
     {
         return source.Subscribe(
-        i => Console.WriteLine("{0}-->{1} onthread: {2}", name, i, Thread.CurrentThread.ManagedThreadId),
+            i => Console.WriteLine("{0}-->{1}", name, (i == null ? String.Empty : i.ToString()).LeftAndRight(60)),
         ex => Console.WriteLine("{0} failed-->{1}", name, ex.Message),
         () => Console.WriteLine("{0} completed", name));
+    }
+    public static string LeftAndRight(this string source, int length )
+    {
+        if (source.Length <= length)
+        {
+            return source;
+        }
+        return source.Left(length / 2) + "..." + source.Right(length / 2);
+    }
+
+    public static string Right(this string original, int numberCharacters)
+    {
+        return original.Substring(original.Length - numberCharacters);
+    }
+
+    /// <summary>
+    /// Returns the source sequence prefixed with the specified value.
+    /// </summary>
+    /// <typeparam name="TSource">Source sequence element type.</typeparam>
+    /// <param name="source">Source sequence.</param>
+    /// <param name="values">Values to prefix the sequence with.</param>
+    /// <returns>Sequence starting with the specified prefix value, followed by the source sequence.</returns>
+    public static IEnumerable<TSource> StartWith<TSource>(this IEnumerable<TSource> source, params TSource[] values)
+    {
+        if (source == null)
+            throw new ArgumentNullException("source");
+        return source.StartWith_(values);
+    }
+    private static IEnumerable<TSource> StartWith_<TSource>(this IEnumerable<TSource> source, params TSource[] values)
+    {
+        foreach (var x in values)
+            yield return x;
+        foreach (var item in source)
+            yield return item;
+    }
+
+}
+public static class Utils
+{
+    public static string Left(this string str, int length)
+    {
+        return str.Substring(0, Math.Min(length, str.Length));
     }
 }

@@ -1,5 +1,7 @@
-﻿using System;
+﻿using ActiveWindow.ViewModels;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -23,6 +25,12 @@ namespace ActiveWindow
         public MainWindow()
         {
             InitializeComponent();
+            if (!DesignerProperties.GetIsInDesignMode(this))
+                ((MainViewModel)this.DataContext).Load();
+            else
+                ((MainViewModel)this.DataContext).Questions.Add(new Work() { What = "Visual Studio", When = DateTime.Now }, new Project(TimeSpan.FromSeconds(15), new Work() { What = "Visual Studio", When = DateTime.Now }));
         }
+
+
     }
 }
